@@ -313,7 +313,7 @@ def reddit_add(args=None) -> None:
             log.error(f"[{path}]: Skipping unknown URL")
             continue
 
-        if db_playlists.get_id(args, path) is None:
+        if db_playlists.get_id(args, path) is None or args.force:
             try:
                 if extractor_key == "reddit_praw_redditor":
                     redditor_new(args, {"path": path, "name": name})

@@ -112,8 +112,8 @@ def torrents_info():
                         "seen_complete": strings.relative_datetime(t.seen_complete) if t.seen_complete > 0 else None,
                         "last_activity": strings.relative_datetime(t.last_activity),
                         "time_active": strings.duration(t.time_active),
-                        "num_seeds": f"{t.num_complete} ({t.num_seeds})",
-                        # 'num_leechs': f"{t.num_incomplete} ({t.num_leechs})",
+                        "num_seeds": f"{t.num_seeds} ({t.num_complete})",
+                        # 'num_leechs': f"{t.num_leechs} ({t.num_incomplete})",
                         # 'comment': t.comment,
                     }
                     for t in torrents

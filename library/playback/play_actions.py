@@ -346,6 +346,7 @@ def process_playqueue(args) -> None:
         media = db_media.get_playlist_media(args, args.playlists)
     else:
         media = list(args.db.query(query, bindings))
+        log.debug("len(media_sql) = %s", len(media))
     log.debug("query: %s", t.elapsed())
 
     if args.fetch_siblings:
