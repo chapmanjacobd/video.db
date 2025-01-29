@@ -217,7 +217,7 @@ def cmd_interactive(*command, strict=True) -> subprocess.CompletedProcess:
         else:
             log.info(msg)
 
-    return subprocess.CompletedProcess(command, return_code)
+    return subprocess.CompletedProcess(command, return_code, "Interactive command")
 
 
 def Pclose(process) -> subprocess.CompletedProcess:  # noqa: N802

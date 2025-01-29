@@ -1,4 +1,4 @@
-import os, select, shlex, socketserver, subprocess, threading
+import os, select, shlex, socketserver, subprocess, sys, threading
 from contextlib import suppress
 from pathlib import Path
 
@@ -16,6 +16,7 @@ def cmd(
     error_verbosity=1,
     ignore_regexps=None,
     cwd=None,
+    pty=False,
     **kwargs,
 ) -> subprocess.CompletedProcess:
     def print_std(s, is_success):
@@ -52,14 +53,63 @@ def cmd(
     command = shlex.join(str(s) for s in command)
     if cwd:
         command = "cd " + shlex.quote(cwd) + "; " + command
-    _stdin, stdout, stderr = ssh.exec_command(command, **kwargs)
-    returncode = stdout.channel.recv_exit_status()
 
+    log_command = command
     host = getattr(ssh, "host", None)
     if host:
-        command = " ".join(["ssh", host, command])
+        log_command = " ".join(["ssh", host, log_command])
 
-    r = subprocess.CompletedProcess(command, returncode, stdout.read().decode(), stderr.read().decode())
+    if pty:
+        # interactive stdin/stdout forwarding
+        transport = ssh.get_transport()
+        channel = transport.open_session()
+        channel.get_pty()  # nice!
+        channel.exec_command(command)
+
+        # local stdin to remote stdin
+        import threading
+
+        def forward_stdin():
+            try:
+                while not channel.closed:
+                    if select.select([sys.stdin], [], [], 0.1)[0]:
+                        data = sys.stdin.read(1)  # one character at a time
+                        if not data:
+                            break
+                        channel.send(data)  # Send to remote stdin
+            except Exception as e:
+                log.warning(f"Error forwarding stdin: {e}")
+
+        # forward stdin
+        stdin_thread = threading.Thread(target=forward_stdin)
+        stdin_thread.daemon = True
+        stdin_thread.start()
+
+        # Remote stdout to local
+        stdout = b""
+        while not channel.closed:
+            if channel.recv_ready():
+                data = channel.recv(4096)
+                if not data:
+                    break
+                stdout += data
+                sys.stdout.write(data.decode())
+                sys.stdout.flush()
+
+            if channel.recv_stderr_ready():
+                stderr_data = channel.recv_stderr(4096)
+                if stderr_data:
+                    sys.stderr.write(stderr_data.decode())
+                    sys.stderr.flush()
+
+        returncode = channel.recv_exit_status()
+        channel.close()
+        r = subprocess.CompletedProcess(log_command, returncode, "Interactive command")
+    else:
+        _stdin, stdout, stderr = ssh.exec_command(command, **kwargs)
+
+        returncode = stdout.channel.recv_exit_status()
+        r = subprocess.CompletedProcess(log_command, returncode, stdout.read().decode(), stderr.read().decode())
 
     if cleanup_local_files and local_files:
         with ssh.open_sftp() as sftp:
